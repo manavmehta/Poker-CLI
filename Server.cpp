@@ -8,17 +8,26 @@
 
 #define MAXREQ 36
 #define MAXQUEUE 5
-
+#define MAX_ROOMS 10
 using namespace std;
 
-unordered_map<string, unordered_set<string>> allRooms;
-unordered_map<string, unordered_set<string>> availableRooms;
+
+int n;
+char reqbuf[MAXREQ];
+
 
 unordered_map<pthread_t, pthread_cond_t> cond_map; 
 pthread_mutex_t mLock = PTHREAD_MUTEX_INITIALIZER; 
 
+
+
+set<int> allRooms;
+set<int> availableRooms;
+map<int, set<string>> roomMembers;
+
 unordered_map<int, string> fd_user_map;
 unordered_map<string, int> user_fd_map;
+unordered_map<string, int> user_room_map;
 unordered_map<thread::id, string> thread_users;
 unordered_map<string, thread::id> user_threads;
 unordered_set<string> active_users;
@@ -54,24 +63,60 @@ void closeSocket(int &fd)
   string closingMsg = "Socket has been closed.\n";
   sendMessage(fd, closingMsg);
   close(fd);
-  // terminate();
 }
 
-void allAvailableRooms(int fd, string username)
+
+void joinRoom(int fd, string username) 
 {
+  memset(::reqbuf, 0, MAXREQ);
+  ::n = read(fd, ::reqbuf, MAXREQ-1);
+  string msg = string(reqbuf);
+  int room_id;
+  if(msg == "?") 
+  {
+    room_id = *allRooms.begin();  
+  } 
+  else 
+  {
+    room_id = stoi(msg);
+  } 
+  user_room_map[username] = room_id;
+  roomMembers[room_id].insert(username);
+  sendMessage(fd, "Welcome to Room: " + to_string(room_id));
   return;
 }
+
+void allAvailableRooms(int fd, string username, string instructionMsg)
+{
+  string availableRoomNumbers = "Room numbers available: ";
+  for(int it: availableRooms) {
+    availableRoomNumbers += (to_string(it) + ",");
+  }
+  availableRoomNumbers.pop_back();
+  sendMessage(fd, availableRoomNumbers + "\n\n" + instructionMsg);
+  return;
+}
+
+
+void createNewRoom(int fd, string username) 
+{
+  int room_id = (rand() % MAX_ROOMS);
+  allRooms.insert(room_id);
+  availableRooms.insert(room_id);
+  user_room_map[username] = room_id;
+  roomMembers[room_id].insert(username);
+  return;
+}
+
+
 
 void* serveClient(void* fd) 
 {
   int consockfd = *((int *)fd);
 
-  int n;
-  char reqbuf[MAXREQ];
-
-  n = read(consockfd, reqbuf, MAXREQ-1);
   
-  string username = string(reqbuf) + "::" + to_string(rand() % 1000);
+  ::n = read(consockfd, ::reqbuf, MAXREQ-1);
+  string username = string(::reqbuf) + "::" + to_string(rand() % 1000);
 
   fd_user_map[consockfd] = username;
   user_fd_map[username] = consockfd;
@@ -87,46 +132,49 @@ void* serveClient(void* fd)
 
   while (1)
   {
-    memset(reqbuf, 0, MAXREQ);
-    n = read(consockfd, reqbuf, MAXREQ-1);
-
+    memset(::reqbuf, 0, MAXREQ);
+    ::n = read(consockfd, ::reqbuf, MAXREQ-1);
+    
     string msg = string(reqbuf);
-    cout << msg << "\n";
 
-    if (msg == "CLOSE\n")
-      closeSocket(consockfd);
-    else if (msg == "1\n")
+    if(user_room_map.find(username) == user_room_map.end()) 
     {
-      available_users.erase(username);
-      // joinRandomRoom(consockfd);
-      available_users.insert(username);
-      sendMessage(consockfd, instructionMsg);
-      cout << msg;
-      continue;
+      if (msg == "CLOSE")
+        closeSocket(consockfd);
+      
+      else if (msg == "1")
+      {
+        // available_users.erase(username);
+        sendMessage(consockfd, "Type an available Room Id or ? for a random room.");
+        joinRoom(consockfd, username);
+      }
+      
+      else if (msg == "2")
+      {
+        allAvailableRooms(consockfd, username, instructionMsg);
+      }
+      
+      else if (msg == "3")
+      {
+        // available_users.erase(username);
+        createNewRoom(consockfd, username);
+        sendMessage(consockfd, "Welcome to Room: " + to_string(user_room_map[username]));
+      }
+      
+      else if (msg == "q" || msg == "Q")
+      {
+        cout << "clicked";
+        closeSocket(consockfd);
+        return NULL;
+      }
+      
+      else
+      {
+        sendMessage(consockfd, instructionMsg);
+      }
     }
-    else if (msg == "2\n")
-    {
-      allAvailableRooms(consockfd, username);
-      sendMessage(consockfd, instructionMsg);
-    }
-    else if (msg == "3\n")
-    {
-      available_users.erase(username);
-      // createNewRoom(consockfd);
-      available_users.insert(username);
-      sendMessage(consockfd, instructionMsg);
-    }
-    else if (msg == "q\n" || msg == "Q\n")
-    {
-      cout << "clicked";
-      closeSocket(consockfd);
-      return NULL;
-    }
-    else
-    {
-      sendMessage(consockfd, instructionMsg);
-      // continue;
-    }
+    else {
+    };
   }
 
   return NULL;

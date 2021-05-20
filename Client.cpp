@@ -117,7 +117,8 @@ int main()
 {
   signal(SIGINT, closeHandler);
 	//Client protocol
-	char serverIP[] = "192.168.29.21";
+	// char serverIP[] = "192.168.29.21";
+  char serverIP[] = "127.0.0.1";
 	int portno = 4321;
 	struct sockaddr_in serv_addr;
 	
