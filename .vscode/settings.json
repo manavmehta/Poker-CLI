@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "fstream": "cpp",
+        "unordered_set": "cpp",
+        "thread": "cpp",
+        "iosfwd": "cpp",
+        "unordered_map": "cpp",
+        "__tree": "cpp",
+        "bitset": "cpp",
+        "set": "cpp",
+        "iostream": "cpp",
+        "filesystem": "cpp",
+        "stdexcept": "cpp",
+        "string": "cpp",
+        "ostream": "cpp"
+    }
+}
