@@ -12,6 +12,11 @@
         "filesystem": "cpp",
         "stdexcept": "cpp",
         "string": "cpp",
-        "ostream": "cpp"
+        "ostream": "cpp",
+        "deque": "cpp",
+        "vector": "cpp",
+        "chrono": "cpp",
+        "ratio": "cpp",
+        "*.tcc": "cpp"
     }
 }

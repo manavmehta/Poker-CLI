@@ -15,6 +15,13 @@
 #define MAXIN 20
 #define MAXSE 36
 #define MAXOUT 1024
+#define FLUSH “\e[1;1H\e[2J”
+#define RED  "\x1B[31m"
+#define RESET "\x1B[0m"
+#define SPADES "\xE2\x99\xA0"
+#define CLUBS "\xE2\x99\xA3"
+#define HEARTS "\xE2\x99\xA5"
+#define DIAMONDS "\xE2\x99\xA6"
 
 using namespace std;
 
@@ -22,9 +29,27 @@ int sockfd;
 
 thread rThread, wThread;
 
-void parseAndDisplay(string s)
-{
-  cout << s << endl;
+void parseAndDisplay(string s){
+	if(s[0]=='^'){
+    cout.flush();
+		char suite=s[1], num=s[2];
+
+		if(suite=='h')
+			cout << ( RED HEARTS ) << num << RESET << " ";
+		else if(suite=='d')
+			cout << ( RED DIAMONDS ) << num << RESET << " ";
+		else if(suite=='s')
+			cout << ( SPADES ) << num << RESET << " ";
+		else
+			cout << ( CLUBS ) << num << RESET << " ";
+    cout.flush();
+    // printf("\n");
+		return;
+	}
+
+	else
+		// cout << s << "\n";
+    printf("%s\n", s.c_str());
 }
 
 void displayMessage(int consockfd) 
@@ -39,7 +64,8 @@ void displayMessage(int consockfd)
     if (n <= 0)
       return;
 
-    parseAndDisplay(string(rcvbuf));
+    cout << string(rcvbuf) << endl;
+    // parseAndDisplay(string(rcvbuf));
   }
 
   return;
@@ -117,9 +143,9 @@ int main()
 {
   signal(SIGINT, closeHandler);
 	//Client protocol
-	// char serverIP[] = "192.168.29.21";
+	// char serverIP[] = "192.168.29.51";
   char serverIP[] = "127.0.0.1";
-	int portno = 4321;
+	int portno = 9000;
 	struct sockaddr_in serv_addr;
 	
 	buildServerAddr(&serv_addr, serverIP, portno);

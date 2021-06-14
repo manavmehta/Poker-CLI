@@ -3,6 +3,8 @@
 #include <unordered_map>
 #include <unistd.h>
 #include <vector>
+#include <string.h>
+#include <string>
 
 #define MAXREQ 36
 
@@ -12,6 +14,7 @@
 #define CLUBS "\xE2\x99\xA3"
 #define HEARTS "\xE2\x99\xA5"
 #define DIAMONDS "\xE2\x99\xA6"
+char* FLUSH = "\e[1;1H\e[2J";
 
 using namespace std;
 
@@ -19,6 +22,7 @@ class Card{
     public:
     char suite;
     char num;
+
     Card(char s, int n){
         suite = s;
         
@@ -30,28 +34,48 @@ class Card{
         else num = (char)n + '0';
     }
 
-    // void print(){
-    //     if(this->suite=='h')
-    //         printf( RED HEARTS " %c  " RESET, this->num );
-    //     else if(this->suite=='d')
-    //         printf( RED DIAMONDS " %c  " RESET, this->num );
-    //     else if(this->suite=='s')
-    //         printf( SPADES " %c  ", this->num );
-    //     else
-    //         printf( CLUBS " %c  ", this->num );
-    //     return;
-    // }
+    void print(){
+        if(this->suite=='h')
+            printf( RED HEARTS " %c  " RESET, this->num );
+        else if(this->suite=='d')
+            printf( RED DIAMONDS " %c  " RESET, this->num );
+        else if(this->suite=='s')
+            printf( SPADES " %c  ", this->num );
+        else
+            printf( CLUBS " %c  ", this->num );
+        return;
+    }
 };
 
 // bool isOpened[52]; // flop, turn, river
 
-// set<Card*> pack_cards;  // the ones still in pack -> unfolded
+set<Card*> pack_cards;  // the ones still in pack -> unfolded
 // set<Card*> table_cards;  // the ones still in pack -> unfolded
 // set<Card*> p1_cards;  // the ones with player 1
 // set<Card*> p2_cards;  // the ones with player 2
 // set<Card*> p3_cards;  // the ones with player 3
 // set<Card*> p4_cards;  // the ones with player 4
 
+
+size_t split(string txt, vector<string> &strs, char ch)
+{
+    size_t pos = txt.find( ch );
+    size_t initialPos = 0;
+    strs.clear();
+
+    // Decompose statement
+    while( pos != string::npos ) {
+        strs.push_back( txt.substr( initialPos, pos - initialPos ) );
+        initialPos = pos + 1;
+
+        pos = txt.find( ch, initialPos );
+    }
+
+    // Add the last one
+    strs.push_back( txt.substr( initialPos, min( pos, txt.size() ) - initialPos + 1 ) );
+
+    return strs.size();
+}
 
 void initPack(set<Card*> &pack_cards){
     // clear pack if set initially
@@ -75,20 +99,27 @@ void sendMessage(int &fd, string s){
 void printPack(set<Card*> &pack_cards){
     set<Card*> :: iterator it;
     for(it = pack_cards.begin(); it != pack_cards.end();it++){
-        // (*it)->print();
+        (*it)->print();
     }
     return;
 }
 
-void printTable(set<Card*> &table_cards, int &fd){
+void printTable(set<Card*> &table_cards, vector<int> &list_fd){
     set<Card*> :: iterator it;
-    for(it = table_cards.begin(); it != table_cards.end();it++){
+    for(it = table_cards.begin(); it != table_cards.end(); it++){
         char suite = (*it)->suite;
         char num = (*it)->num;
         string message = "";
-        message += to_string(suite);
-        message += to_string(num);
-        sendMessage(fd, message);
+        message.push_back('|'); // to signify printing a card
+        message.push_back(suite);
+        message.push_back(num);
+        message.push_back(' ');
+        message.push_back('|'); // to signify printing a card
+        message.push_back('\n');
+        // printf("%s\n", message);
+        for(auto fd : list_fd){
+            sendMessage(fd, message);
+        }
     }
     return;
 }
@@ -107,35 +138,44 @@ void pickCards(set<Card*> &pack_cards, set<Card*> &p_cards)
     return;
 }
 
-void initPlayers(set<Card*> &pack_cards, set<Card*> &p1_cards, set<Card*> &p2_cards, set<Card*> &p3_cards, set<Card*> &p4_cards){ // modularize
-    // for(set<Card*> &p_cards : {p1_cards, p2_cards, p3_cards, p4_cards})
-    pickCards(pack_cards, p1_cards);
-    pickCards(pack_cards, p2_cards);
-    pickCards(pack_cards, p3_cards);
-    pickCards(pack_cards, p4_cards);
-    return;
+void play_blind(unordered_map<string, int> &user_fd_map, unordered_map<string, int> &player_amount){
+    int blind_amount = 100;
+    unordered_map<string, int> :: iterator it;
+    for (it = player_amount.begin(); it != player_amount.end(); it++) {
+        it->second -= blind_amount;
+        sendMessage(user_fd_map[it->first], FLUSH);
+        sendMessage(user_fd_map[it->first], "Blind placed: 100 coins");
+    }
 }
 
-void printPlayer(set<Card*> &player_cards, int &fd){
+void printPlayer(set<Card*> &player_cards, int fd){
     set<Card*> :: iterator it;
     for(it = player_cards.begin(); it != player_cards.end();it++){
         char suite = (*it)->suite;
         char num = (*it)->num;
         string message = "";
-        message += to_string(suite);
-        message += to_string(num);
+        message.push_back('|'); // to signify printing a card
+        message.push_back(suite);
+        message.push_back(num);
+        message.push_back('|');
+        message.push_back('\n');
         sendMessage(fd, message);
     }
     return;
 }
 
-void play_blind(unordered_map<string, int> &player_amount, int &fd){
-    int blind_amount = 100;
-    unordered_map<string, int> :: iterator it;
-    for (it = player_amount.begin(); it != player_amount.end(); it++) {
-        it->second -= blind_amount;
+//  modularize
+void initPlayers(set<Card*> &pack_cards, unordered_map<int, set<Card*> > &p_cards, unordered_map<string, int> &user_fd_map, unordered_map<string, int> &player_amount, vector<int> &list_fd){
+    unordered_map<int, set<Card*> > :: iterator it;
+    for(it = p_cards.begin(); it != p_cards.end(); it++){
+        pickCards(pack_cards, it->second);
     }
-    sendMessage(fd, "Blind placed: 100 coins");
+
+    play_blind(user_fd_map, player_amount);
+    for(it = p_cards.begin(); it != p_cards.end(); it++){
+        printPlayer(it->second, it->first);
+    }
+    return;
 }
 
 void open_cards(int num_cards, set<Card*> &pack_cards, set<Card*> &table_cards){
@@ -148,7 +188,18 @@ void open_cards(int num_cards, set<Card*> &pack_cards, set<Card*> &table_cards){
     return;
 }
 
-void play_Round(int roundN, set<Card*> &pack_cards, set<Card*> &table_cards, vector<int> &list_fd, unordered_map<string, int> &player_amount, unordered_map<int, string> fd_user_map){
+int judge(vector<int> list_fd){
+    int idx = rand() % list_fd.size();
+    return list_fd[idx];
+}
+
+bool play_Round(int roundN, set<Card*> &pack_cards, set<Card*> &table_cards, vector<int> &list_fd,
+                unordered_map<string, int> &player_amount, unordered_map<int, string> fd_user_map,
+                unordered_map<int, set<Card*>> &p_cards, int &pot){
+    
+    // Edge case: Only one player left at the table
+    if(list_fd.size() == 1) return 0;
+    
     // print flop
     if(roundN == 1)
         open_cards(3, pack_cards, table_cards);
@@ -156,66 +207,123 @@ void play_Round(int roundN, set<Card*> &pack_cards, set<Card*> &table_cards, vec
     else
         open_cards(1, pack_cards, table_cards);
     
-    for (int fd : list_fd){
-        printTable(table_cards, fd);
+    // printTable(table_cards, list_fd);
+
+    // player 1 -> always the dealer
+    int player_in_action = list_fd[0]; // ++  %list_fd.size()
+
+    for(auto fd : list_fd){
+        sendMessage(fd, FLUSH);
+        sendMessage(fd, "Playing round " + to_string(roundN) + "\n");
+
+        sendMessage(fd, "\nYour Cards:\n");
+        printPlayer(p_cards[fd], fd);
+        
+        sendMessage(fd, "\nCards on table:\n");
     }
 
+    printTable(table_cards, list_fd);
 
-    // player 1
-    int player_in_action = list_fd[0]; // ++  %list_fd.size()
-    sendMessage(player_in_action, "Place your bet");
+    int max_bet = -1;
+    unordered_map<int, int> bets;
 
-    char reqbuf[MAXREQ];
-    memset(reqbuf, 0, MAXREQ);
-	read(player_in_action, reqbuf, MAXREQ-1);
+    while (!bets.count(player_in_action) || bets[player_in_action] < max_bet)
+    {
+        if (max_bet > bets[player_in_action])
+        {
+            string clientMsg = "\nYour Money = " + to_string(player_amount[fd_user_map[player_in_action]]) + "\n";
+            sendMessage(player_in_action, clientMsg);
+            
+            sendMessage(player_in_action, "\nCurrent bet: " + to_string(max_bet) + "\nDo you wanna raise [y/n]?\n");
 
-	string msg = string(reqbuf);
-    msg.pop_back();
-    int bet = stoi(msg);
+            char reqbuf[MAXREQ];
+            memset(reqbuf, 0, MAXREQ);
+            read(player_in_action, reqbuf, MAXREQ-1);
 
-    // player 2 3 4
-    // loop
-    for(int i = 1; i < list_fd.size(); i++){
-        player_in_action = list_fd[i];
-        string clientMsg = "Present bet = " + to_string(bet) + "\nMake a choice:\nc:Call\nr:Raise <bet>\nf:Fold\n";
-        sendMessage(player_in_action, clientMsg);
-        
-        memset(reqbuf, 0, MAXREQ);
-        read(player_in_action, reqbuf, MAXREQ-1);
+            string msg = string(reqbuf);
 
-        msg = string(reqbuf);
-        msg.pop_back();
-        
-        if(msg[0] == 'c'){
-            player_amount[fd_user_map[player_in_action]] -= bet;
+            if (msg == "y")
+            {
+                player_amount[fd_user_map[player_in_action]] -= max_bet - bets[player_in_action];
+                bets[player_in_action] = max_bet;
+            }
+            else
+            {
+                list_fd.erase(list_fd.begin());
+            }
         }
-        else if (msg[0] == 'f') {
-            list_fd.erase(list_fd.begin() + i);
-            i--;
+        else
+        {
+            string clientMsg = "\nYour Money = " + to_string(player_amount[fd_user_map[player_in_action]]) + "\n";
+            sendMessage(player_in_action, clientMsg);
+            
+            sendMessage(player_in_action, "\nPlace your bet: \n");
+            
+            char reqbuf[MAXREQ];
+            memset(reqbuf, 0, MAXREQ);
+            read(player_in_action, reqbuf, MAXREQ-1);
+
+            string msg = string(reqbuf);
+            if (msg != "")
+                bets[player_in_action] = stoi(msg);
+            else
+                return 0;
+
+            max_bet = bets[player_in_action];
+
+            player_amount[fd_user_map[player_in_action]] -= bets[player_in_action];
+
+            pot += bets[player_in_action];
         }
-        else{
-            char* arr = new char[msg.size() + 1];
-	        strcpy(arr, msg.c_str());
-            char* reply = strtok(arr, " ");
-            bet = stoi(to_string(reply[1]));
-            player_amount[fd_user_map[player_in_action]] -= bet;
+
+        for(int i = 1; i < list_fd.size(); i++){
+            player_in_action = list_fd[i];
+            
+            if (max_bet == bets[player_in_action])
+                continue;
+
+            string clientMsg = "Your Money = " + to_string(player_amount[fd_user_map[player_in_action]]) + "\nPresent bet = " + to_string(max_bet) + "\nMake a choice:\nc:Call\n<number>:Raise\nf:Fold\n";
+            sendMessage(player_in_action, clientMsg);
+            
+            char reqbuf[MAXREQ];
+            memset(reqbuf, 0, MAXREQ);
+            read(player_in_action, reqbuf, MAXREQ-1);
+
+            string msg = string(reqbuf);
+            
+            if(msg[0] == 'c'){
+                player_amount[fd_user_map[player_in_action]] -= max_bet;
+                pot += max_bet;
+            }
+            else if (msg[0] == 'f') {
+                list_fd.erase(list_fd.begin() + i);
+                i--;
+            }
+            else{
+                bets[player_in_action] = stoi(msg);
+                max_bet = bets[player_in_action];
+                cout << bets[player_in_action] << " " << max_bet << endl;
+                pot += bets[player_in_action];
+                player_amount[fd_user_map[player_in_action]] -= bets[player_in_action];
+            }
         }
+        player_in_action = list_fd[0];
+    }
+
+    if (list_fd.size() == 1)
+    {
+        player_amount[fd_user_map[list_fd[0]]] += pot;
+        sendMessage(list_fd[0], "You have won " + to_string(pot) + "\nWait for 5 Seconds\n");
+        sleep(5);
+        return -1;
     }
 
     if (roundN == 3){
-        // judge(); // args : p1, p2, p3 => "1 or 2 or 3"; winner_amount += pot ; pot=0;
+        int fd = judge(list_fd); // args : p1, p2, p3 => "1 or 2 or 3"; winner_amount += pot ; pot=0;
+        player_amount[fd_user_map[fd]] += pot;
+        sendMessage(fd, "You have won " + to_string(pot) + "\nWait for 5 Seconds\n");
+        sleep(5);
     }
 
+    return 1;
 }
-
-// loop(init => blind => flop + play_round1 => turn + play r2 => river + play r3 => judgement)
-
-// int main(){
-//     initPack();
-//     initPlayers();
-//     set<Card*> :: iterator it;
-    
-//     // play_blind();
-
-//     return 0;
-// }

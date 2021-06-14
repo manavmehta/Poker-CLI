@@ -1,0 +1,6 @@
+0) formatting
+1) check if only one player before every round => declare him winner -> first statement
+2) prevent balance underflow
+3) fold logic
+4) Implement judgement logic
+5) Maintain pot amount
