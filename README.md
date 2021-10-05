@@ -1,4 +1,4 @@
-# Systems-Project
+# Systems Practicum Project
 
 ## Setup
 ```
